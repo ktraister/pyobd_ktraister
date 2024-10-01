@@ -27,6 +27,7 @@
 #import pint
 #from mem_top import mem_top
 #import logging
+from pathlib import Path
 import numpy as np
 #import multiprocessing
 #from multiprocessing import Queue, Process
@@ -79,6 +80,8 @@ from obd.utils import OBDStatus
 
 ID_ABOUT = 101
 ID_EXIT = 110
+ID_RECORD = 300
+ID_REPLAY = 301
 ID_CONFIG = 500
 ID_CLEAR = 501
 ID_GETC = 502
@@ -2137,6 +2140,8 @@ class MyApp(wx.App):
         self.settingmenu.Enable(ID_CONFIG, False)
         self.settingmenu.Enable(ID_RESET, False)
         self.settingmenu.Enable(ID_DISCONNECT, True)
+        self.settingmenu.Enable(ID_RECORD, True)
+        self.settingmenu.Enable(ID_REPLAY, True)
         self.dtcmenu.Enable(ID_GETC, True)
         self.dtcmenu.Enable(ID_CLEAR, True)
         self.GetDTCButton.Enable(True)
@@ -2165,6 +2170,8 @@ class MyApp(wx.App):
         self.settingmenu.Enable(ID_DISCONNECT, False)
         self.settingmenu.Enable(ID_CONFIG, True)
         self.settingmenu.Enable(ID_RESET, True)
+        self.settingmenu.Enable(ID_RECORD, False)
+        self.settingmenu.Enable(ID_REPLAY, True)
         self.GetDTCButton.Enable(False)
         self.ClearDTCButton.Enable(False)
         # http://pyserial.sourceforge.net/                                                    empty function
@@ -2600,6 +2607,8 @@ class MyApp(wx.App):
         self.settingmenu.Append(ID_CONFIG, "Configure", " Configure pyOBD")
         self.settingmenu.Append(ID_RESET, "Connect", " Reopen and connect to device")
         self.settingmenu.Append(ID_DISCONNECT, "Disconnect", "Close connection to device")
+        self.settingmenu.Append(ID_RECORD, "Record", "Record OBD data to JSON file for replay")
+        self.settingmenu.Append(ID_REPLAY, "Replay", "Replay existing OBD data files")
 
         self.dtcmenu = wx.Menu()
         # tady toto nastavi automaticky tab DTC a provede akci
@@ -2625,6 +2634,8 @@ class MyApp(wx.App):
         self.frame.Bind(wx.EVT_MENU, self.OnExit, id=ID_EXIT)  # attach the menu-event ID_EXIT to the
         self.frame.Bind(wx.EVT_MENU, self.QueryClear, id=ID_CLEAR)
         self.frame.Bind(wx.EVT_MENU, self.Configure, id=ID_CONFIG)
+        self.frame.Bind(wx.EVT_MENU, self.Replay, id=ID_REPLAY)
+        self.frame.Bind(wx.EVT_MENU, self.Record, id=ID_RECORD)
         self.frame.Bind(wx.EVT_MENU, self.OpenPort, id=ID_RESET)
         self.frame.Bind(wx.EVT_MENU, self.OnDisconnect, id=ID_DISCONNECT)
         self.frame.Bind(wx.EVT_MENU, self.GetDTC, id=ID_GETC)
@@ -3350,6 +3361,32 @@ the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  0211
         available = obd.scan_serial()
 
         return available
+
+    def Record(self, e=None):
+        print("Inside Record!")
+
+    def record_action(self, e=None):
+        print("Record action!")
+
+
+    def Replay(self, e=None):
+        print("Inside Replay!")
+        on_top = wx.DEFAULT_FRAME_STYLE | wx.STAY_ON_TOP
+        frame = wx.Frame(None, -1, "pyOBD-II - Recording", style=on_top)
+
+        output_file = str(Path.home()) + "/pyOBD/" + str(datetime.datetime.now().strftime("%Y-%M-%d_%H-%M")) + ".json"
+        file_input = wx.TextCtrl(frame, value=output_file)
+        submit_button = wx.Button(frame, label="Submit")
+        submit_button.Bind(wx.EVT_BUTTON, self.record_action)
+        file_text = wx.StaticText(frame, label="Which file?")
+
+        vbox = wx.BoxSizer(wx.VERTICAL)
+        vbox.Add(file_text, flag=wx.EXPAND | wx.CENTER, border=10)
+        vbox.Add(file_input, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.CENTER, border=10)
+        vbox.Add(submit_button, flag=wx.ALL | wx.CENTER, border=10)
+        frame.SetSizer(vbox)
+        
+        frame.Show()
 
     def Configure(self, e=None):
         id = 0
