@@ -57,6 +57,7 @@ import os  # os.environ
 #import glob
 import datetime
 import threading
+import json
 import sys
 import serial
 #import platform
@@ -3365,28 +3366,93 @@ the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  0211
     def Record(self, e=None):
         print("Inside Record!")
 
+    def stop_record_action(self, e=None):
+        print("Inside stop_record_action!")
+        self.iterate = False 
+        self.srecord_button.Hide()
+        self.wrote_text.Show()
+
+
     def record_action(self, e=None):
         print("Record action!")
+
+        #change the "Record" button to a "Stop Recording" button
+        self.srecord_button.Show()
+        self.record_button.Hide()
+        self.file_text.Hide()
+        self.file_input.Hide()
+        
+        t1 = threading.Thread(target=self.write_record_data)
+        t1.start()
+        
+        """
+        #ensure that the directory exists
+        file_path = str(output_file.split("/")[:-1])
+        print(file_path)
+        if not os.path.exists(file_path):
+            print("Creating dir " + file_path)
+            os.makedirs(file_path)
+        """
+
+    def write_record_data(self):
+        print("Inside write_record_data!")
+        self.iterate = True
+        #record data into json file UNTIL button click
+        OF = open(self.file_input.GetValue(), "w") 
+        print("write file "+ self.file_input.GetValue() + " opened")
+        while True:
+            #tee data from sensors into JSON output 
+            data = {"foo":"bar"}
+            json.dump(data, OF)
+            if self.iterate == False:
+                break
+            time.sleep(.5)
+        OF.close()
 
 
     def Replay(self, e=None):
         print("Inside Replay!")
-        on_top = wx.DEFAULT_FRAME_STYLE | wx.STAY_ON_TOP
-        frame = wx.Frame(None, -1, "pyOBD-II - Recording", style=on_top)
+        
+        #CURRENTLY hijacking replay functionality to test record functionality -- will update when ready for real-world testing
+        output_file = str(Path.home()) + "/pyOBD/" + str(datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")) + ".json"
 
-        output_file = str(Path.home()) + "/pyOBD/" + str(datetime.datetime.now().strftime("%Y-%M-%d_%H-%M")) + ".json"
-        file_input = wx.TextCtrl(frame, value=output_file)
-        submit_button = wx.Button(frame, label="Submit")
-        submit_button.Bind(wx.EVT_BUTTON, self.record_action)
-        file_text = wx.StaticText(frame, label="Which file?")
+        self.recording_frame = wx.Frame(None, -1, "pyOBD-II - Recording", style=wx.DEFAULT_FRAME_STYLE | wx.STAY_ON_TOP)
+        self.file_input = wx.TextCtrl(self.recording_frame, value=output_file)
+        self.record_button = wx.Button(self.recording_frame, label="Start Recording")
+        self.record_button.Bind(wx.EVT_BUTTON, self.record_action)
+        self.srecord_button = wx.Button(self.recording_frame, label="Stop Recording")
+        self.srecord_button.Bind(wx.EVT_BUTTON, self.stop_record_action)
+
+        self.file_text = wx.StaticText(self.recording_frame, label="Which file?")
+        self.wrote_text = wx.StaticText(self.recording_frame, label="Wrote data to file")
+        spacer = wx.StaticText(self.recording_frame, label="")
 
         vbox = wx.BoxSizer(wx.VERTICAL)
-        vbox.Add(file_text, flag=wx.EXPAND | wx.CENTER, border=10)
-        vbox.Add(file_input, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.CENTER, border=10)
-        vbox.Add(submit_button, flag=wx.ALL | wx.CENTER, border=10)
-        frame.SetSizer(vbox)
+        vbox.Add(spacer, flag=wx.CENTER, border=10)
+        vbox.Add(self.wrote_text, flag=wx.CENTER, border=10)
+        vbox.Add(self.file_text, flag=wx.CENTER, border=10)
+        vbox.Add(self.file_input, flag=wx.EXPAND | wx.CENTER, border=10)
+        vbox.Add(self.srecord_button, flag=wx.ALL | wx.CENTER, border=10)
+        vbox.Add(self.record_button, flag=wx.ALL | wx.CENTER, border=10)
+        self.recording_frame.SetSizer(vbox)
         
-        frame.Show()
+        self.recording_frame.Show()
+        self.srecord_button.Hide()
+        self.wrote_text.Hide()
+
+        #end Record code
+
+
+        """
+            #maybe this will be better for replaying -- help end users find the file they want to replay
+
+            def on_open(self, event):
+                # Open a file dialog
+                with wx.FileDialog(self, "Open file", wildcard="*.*", style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as dialog:
+                    if dialog.ShowModal() == wx.ID_OK:
+                        path = dialog.GetPath()
+                        self.output.SetLabel(f"Opened: {path}")
+        """
 
     def Configure(self, e=None):
         id = 0
