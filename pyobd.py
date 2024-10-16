@@ -471,6 +471,46 @@ class MyApp(wx.App):
 
                 return "OK"
 
+        def recordSensorData(self):
+            s = self.connection.connection.query(obd.commands.RPM)
+            if s.value == None:
+                reconnect()
+
+            #create dynamic list of our available sensors
+            sensor_list = []
+            for command in obd.commands[1]:
+                if command:
+                    if command.command not in (b"0100" , b"0101", b"0120", b"0140", b"0103", b"0102", b"011C", b"0113", b"0141", b"0151"):
+                        s = self.connection.connection.query(command)
+                        if s.value == None:
+                            continue
+                        else:
+                            sensor_list.append([command])
+            sensor_list.append([obd.commands.ELM_VOLTAGE])
+
+            #actually record the data into our outfile
+            print("Writing record_data!")
+            self.iterate = True              
+            #record data into json file UNTIL button click
+            with open(self.file_input.GetValue(), "w") as OF:
+                print("write file "+ self.file_input.GetValue() + " opened")
+                while True:                      
+                    data = {"timestamp":str(datetime.datetime.now().timestamp())}         
+
+                    #fill out our data
+                    for sensor in sensor_list:
+                        s = self.connection.connection.query(sensor)
+                        data[sensor] = s.value
+
+                    #print debugging and dump into the file
+                    print("DEBUGGING " + str(data))
+                    json.dump(data, OF)          
+
+                    #break when we're done
+                    if self.iterate == False:
+                        break                    
+                    time.sleep(.5)               
+
 
         def run(self):
 
@@ -901,6 +941,10 @@ class MyApp(wx.App):
                     "PM_FILTER_MONITORING"
                     """
 
+                #YARRRRGGGG
+                #This is the shit I need to use to build out the data metioned above!
+                #the problem is this function only executes when we're dealing with with this one tab. We need it in the background
+                #AFTER WE CALL THE APPROPRIATE RECORD FUNCTION
                 elif curstate == 2:  # show sensor tab
                     s = self.connection.connection.query(obd.commands.RPM)
                     if s.value == None:
@@ -3356,7 +3400,6 @@ the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  0211
         return False
 
     def scanSerial(self):  # NEW
-
         """scan for available ports. return a list of serial names"""
         available = []
         available = obd.scan_serial()
@@ -3365,6 +3408,31 @@ the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  0211
 
     def Record(self, e=None):
         print("Inside Record!")
+        output_file = str(Path.home()) + "/pyOBD/" + str(datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")) + ".json"
+
+        self.recording_frame = wx.Frame(None, -1, "pyOBD-II - Recording", style=wx.DEFAULT_FRAME_STYLE | wx.STAY_ON_TOP)
+        self.file_input = wx.TextCtrl(self.recording_frame, value=output_file)
+        self.record_button = wx.Button(self.recording_frame, label="Start Recording")
+        self.record_button.Bind(wx.EVT_BUTTON, self.record_action)
+        self.srecord_button = wx.Button(self.recording_frame, label="Stop Recording")
+        self.srecord_button.Bind(wx.EVT_BUTTON, self.stop_record_action)
+
+        self.file_text = wx.StaticText(self.recording_frame, label="Which file?")
+        self.wrote_text = wx.StaticText(self.recording_frame, label="Wrote data to file")
+        spacer = wx.StaticText(self.recording_frame, label="")
+
+        vbox = wx.BoxSizer(wx.VERTICAL)
+        vbox.Add(spacer, flag=wx.CENTER, border=10)
+        vbox.Add(self.wrote_text, flag=wx.CENTER, border=10)
+        vbox.Add(self.file_text, flag=wx.CENTER, border=10)
+        vbox.Add(self.file_input, flag=wx.EXPAND | wx.CENTER, border=10)
+        vbox.Add(self.srecord_button, flag=wx.ALL | wx.CENTER, border=10)
+        vbox.Add(self.record_button, flag=wx.ALL | wx.CENTER, border=10)
+        self.recording_frame.SetSizer(vbox)
+        
+        self.recording_frame.Show()
+        self.srecord_button.Hide()
+        self.wrote_text.Hide()
 
     def stop_record_action(self, e=None):
         print("Inside stop_record_action!")
@@ -3375,16 +3443,15 @@ the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  0211
 
     def record_action(self, e=None):
         print("Record action!")
-
         #change the "Record" button to a "Stop Recording" button
         self.srecord_button.Show()
         self.record_button.Hide()
         self.file_text.Hide()
         self.file_input.Hide()
-        
-        t1 = threading.Thread(target=self.write_record_data)
-        t1.start()
-        
+
+        self.senprod = self.sensorProducer(self, self.COMPORT, self.SERTIMEOUT, self.RECONNATTEMPTS, self.BAUDRATE, self.FAST, self.nb)
+        self.senprod.recordSensorData()
+
         """
         #ensure that the directory exists
         file_path = str(output_file.split("/")[:-1])
@@ -3412,37 +3479,6 @@ the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  0211
 
     def Replay(self, e=None):
         print("Inside Replay!")
-        
-        #CURRENTLY hijacking replay functionality to test record functionality -- will update when ready for real-world testing
-        output_file = str(Path.home()) + "/pyOBD/" + str(datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")) + ".json"
-
-        self.recording_frame = wx.Frame(None, -1, "pyOBD-II - Recording", style=wx.DEFAULT_FRAME_STYLE | wx.STAY_ON_TOP)
-        self.file_input = wx.TextCtrl(self.recording_frame, value=output_file)
-        self.record_button = wx.Button(self.recording_frame, label="Start Recording")
-        self.record_button.Bind(wx.EVT_BUTTON, self.record_action)
-        self.srecord_button = wx.Button(self.recording_frame, label="Stop Recording")
-        self.srecord_button.Bind(wx.EVT_BUTTON, self.stop_record_action)
-
-        self.file_text = wx.StaticText(self.recording_frame, label="Which file?")
-        self.wrote_text = wx.StaticText(self.recording_frame, label="Wrote data to file")
-        spacer = wx.StaticText(self.recording_frame, label="")
-
-        vbox = wx.BoxSizer(wx.VERTICAL)
-        vbox.Add(spacer, flag=wx.CENTER, border=10)
-        vbox.Add(self.wrote_text, flag=wx.CENTER, border=10)
-        vbox.Add(self.file_text, flag=wx.CENTER, border=10)
-        vbox.Add(self.file_input, flag=wx.EXPAND | wx.CENTER, border=10)
-        vbox.Add(self.srecord_button, flag=wx.ALL | wx.CENTER, border=10)
-        vbox.Add(self.record_button, flag=wx.ALL | wx.CENTER, border=10)
-        self.recording_frame.SetSizer(vbox)
-        
-        self.recording_frame.Show()
-        self.srecord_button.Hide()
-        self.wrote_text.Hide()
-
-        #end Record code
-
-
         """
             #maybe this will be better for replaying -- help end users find the file they want to replay
 
